@@ -1,0 +1,7 @@
+[package]
+name = "table-extract"
+version = "0.1.0"
+authors = ["Mitchell Kember <mk12360@gmail.com>"]
+
+[dependencies]
+scraper = "0.4.0"
