@@ -25,12 +25,12 @@
 //!         <tr><td>John</td><td>20</td></tr>
 //!     </table>
 //! "#;
-//! let table = table_extract::Table::find_first(html);
+//! let table = table_extract::Table::find_first(html).unwrap();
 //! for row in &table {
 //!     println!(
 //!         "{} is {} years old",
 //!         row.get("Name").unwrap_or("<name missing>"),
-//!         row.get("Age").unwrap_or_else("<age missing>")
+//!         row.get("Age").unwrap_or("<age missing>")
 //!     )
 //! }
 //! ```
@@ -45,8 +45,7 @@ extern crate scraper;
 
 use scraper::element_ref::ElementRef;
 use scraper::{Html, Selector};
-use std::collections::{HashMap, HashSet};
-use std::iter::FromIterator;
+use std::collections::HashMap;
 
 /// A map from `<th>` table headers to their zero-based positions.
 ///
@@ -91,14 +90,14 @@ impl Table {
     }
 
     /// Finds the table in `html` whose first row contains all of the headers
-    /// specified in `headers`.
+    /// specified in `headers`. The order does not matter.
     ///
     /// If `headers` is empty, this is the same as
     /// [`find_first`](#method.find_first).
-    pub fn find_by_headers(
-        html: &str,
-        headers: &HashSet<String>,
-    ) -> Option<Self> {
+    pub fn find_by_headers<T>(html: &str, headers: &[T]) -> Option<Self>
+    where
+        T: AsRef<str>,
+    {
         if headers.is_empty() {
             return Self::find_first(html);
         }
@@ -111,7 +110,8 @@ impl Table {
         html.select(&sel_table)
             .find(|table| {
                 table.select(&sel_tr).next().iter().any(|&tr| {
-                    select_cells::<HashSet<_>>(tr, &sel_th).is_superset(headers)
+                    let cells = select_cells(tr, &sel_th);
+                    headers.iter().all(|h| contains_str(&cells, h.as_ref()))
                 })
             })
             .map(Self::new)
@@ -119,12 +119,18 @@ impl Table {
 
     /// Returns the headers of the table.
     ///
-    /// This will be empty if the table had no `<th>` tags in its first row.
+    /// This will be empty if the table had no `<th>` tags in its first row. See
+    /// [`Headers`](type.Headers.html) for more.
     pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
     /// Returns an iterator over the [`Row`](struct.Row.html)s of the table.
+    ///
+    /// Only `<td>` cells are considered when generating rows. If the first row
+    /// of the table is a header row, meaning it contains at least one `<th>`
+    /// cell, the iterator will start on the second row. Use
+    /// [`headers`](#method.headers) to access the header row in that case.
     pub fn iter(&self) -> Iter {
         Iter {
             headers: &self.headers,
@@ -183,6 +189,7 @@ impl<'a> Iterator for Iter<'a> {
 /// contains the same number of cells as the table's header row, its cells can
 /// be safely accessed by header names using [`get`](#method.get). Otherwise,
 /// the data should be accessed via [`as_slice`](#method.as_slice).
+#[derive(Debug, Eq, PartialEq)]
 pub struct Row<'a> {
     headers: &'a Headers,
     cells: &'a [String],
@@ -219,11 +226,12 @@ fn css(selector: &'static str) -> Selector {
     Selector::parse(selector).unwrap()
 }
 
-fn select_cells<T>(element: ElementRef, selector: &Selector) -> T
-where
-    T: FromIterator<String>,
-{
+fn select_cells(element: ElementRef, selector: &Selector) -> Vec<String> {
     element.select(selector).map(|e| e.inner_html()).collect()
+}
+
+fn contains_str(slice: &[String], item: &str) -> bool {
+    slice.iter().any(|s| s == item)
 }
 
 #[cfg(test)]
@@ -344,9 +352,21 @@ mod tests {
     }
 
     #[test]
+    fn test_find_by_headers_empty() {
+        let headers: [&str; 0] = [];
+
+        assert_eq!(None, Table::find_by_headers("", &headers));
+        assert_eq!(None, Table::find_by_headers("foo", &headers));
+        assert_eq!(None, Table::find_by_headers(HTML_NO_TABLE, &headers));
+
+        assert!(Table::find_by_headers(TABLE_EMPTY, &headers).is_some());
+        assert!(Table::find_by_headers(HTML_TWO_TABLES, &headers).is_some());
+    }
+
+    #[test]
     fn test_find_by_headers_none() {
-        let headers = hashset(vec!["Age", "Name"]);
-        let bad_headers = hashset(vec!["Age", "BAD"]);
+        let headers = ["Name", "Age"];
+        let bad_headers = ["Name", "BAD"];
 
         assert_eq!(None, Table::find_by_headers("", &headers));
         assert_eq!(None, Table::find_by_headers("foo", &headers));
@@ -361,26 +381,172 @@ mod tests {
 
     #[test]
     fn test_find_by_headers_some() {
-        let headers = HashSet::new();
+        let headers: [&str; 0] = [];
         assert!(Table::find_by_headers(TABLE_TH, &headers).is_some());
         assert!(Table::find_by_headers(TABLE_TH_TD, &headers).is_some());
         assert!(Table::find_by_headers(HTML_TWO_TABLES, &headers).is_some());
 
-        let headers = hashset(vec!["Name"]);
+        let headers = ["Name"];
         assert!(Table::find_by_headers(TABLE_TH, &headers).is_some());
         assert!(Table::find_by_headers(TABLE_TH_TD, &headers).is_some());
         assert!(Table::find_by_headers(HTML_TWO_TABLES, &headers).is_some());
 
-        let headers = hashset(vec!["Name", "Age"]);
+        let headers = ["Age", "Name"];
         assert!(Table::find_by_headers(TABLE_TH, &headers).is_some());
         assert!(Table::find_by_headers(TABLE_TH_TD, &headers).is_some());
         assert!(Table::find_by_headers(HTML_TWO_TABLES, &headers).is_some());
     }
 
     #[test]
-    fn test_iter() {}
+    fn test_headers_empty() {
+        let empty = HashMap::new();
+        assert_eq!(&empty, Table::find_first(TABLE_TD).unwrap().headers());
+        assert_eq!(&empty, Table::find_first(TABLE_TD_TD).unwrap().headers());
+    }
 
-    fn hashset(vec: Vec<&'static str>) -> HashSet<String> {
-        HashSet::from_iter(vec.into_iter().map(String::from))
+    #[test]
+    fn test_headers_nonempty() {
+        let mut headers = HashMap::new();
+        headers.insert("Name".to_string(), 0);
+        headers.insert("Age".to_string(), 1);
+
+        assert_eq!(&headers, Table::find_first(TABLE_TH).unwrap().headers());
+        assert_eq!(&headers, Table::find_first(TABLE_TH_TD).unwrap().headers());
+        assert_eq!(&headers, Table::find_first(TABLE_TH_TH).unwrap().headers());
+
+        headers.insert("Extra".to_string(), 2);
+        assert_eq!(
+            &headers,
+            Table::find_first(TABLE_COMPLEX).unwrap().headers()
+        );
+    }
+
+    #[test]
+    fn test_iter_empty() {
+        assert_eq!(0, Table::find_first(TABLE_EMPTY).unwrap().iter().count());
+        assert_eq!(0, Table::find_first(TABLE_TH).unwrap().iter().count());
+    }
+
+    #[test]
+    fn test_iter_nonempty() {
+        assert_eq!(1, Table::find_first(TABLE_TD).unwrap().iter().count());
+        assert_eq!(1, Table::find_first(TABLE_TH_TD).unwrap().iter().count());
+        assert_eq!(2, Table::find_first(TABLE_TD_TD).unwrap().iter().count());
+        assert_eq!(1, Table::find_first(TABLE_TH_TH).unwrap().iter().count());
+        assert_eq!(4, Table::find_first(TABLE_COMPLEX).unwrap().iter().count());
+    }
+
+    #[test]
+    fn test_row_is_empty() {
+        let table = Table::find_first(TABLE_TD).unwrap();
+        assert_eq!(
+            vec![false],
+            table.iter().map(|r| r.is_empty()).collect::<Vec<_>>()
+        );
+
+        let table = Table::find_first(TABLE_COMPLEX).unwrap();
+        assert_eq!(
+            vec![false, false, true, false],
+            table.iter().map(|r| r.is_empty()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_row_len() {
+        let table = Table::find_first(TABLE_TD).unwrap();
+        assert_eq!(vec![2], table.iter().map(|r| r.len()).collect::<Vec<_>>());
+
+        let table = Table::find_first(TABLE_COMPLEX).unwrap();
+        assert_eq!(
+            vec![2, 3, 0, 4],
+            table.iter().map(|r| r.len()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_row_get_without_headers() {
+        let table = Table::find_first(TABLE_TD).unwrap();
+        let mut iter = table.iter();
+        let row = iter.next().unwrap();
+
+        assert_eq!(None, row.get(""));
+        assert_eq!(None, row.get("foo"));
+        assert_eq!(None, row.get("Name"));
+        assert_eq!(None, row.get("Age"));
+
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_get_with_headers() {
+        let table = Table::find_first(TABLE_TH_TD).unwrap();
+        let mut iter = table.iter();
+        let row = iter.next().unwrap();
+
+        assert_eq!(None, row.get(""));
+        assert_eq!(None, row.get("foo"));
+        assert_eq!(Some("John"), row.get("Name"));
+        assert_eq!(Some("20"), row.get("Age"));
+
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_get_complex() {
+        let table = Table::find_first(TABLE_COMPLEX).unwrap();
+        let mut iter = table.iter();
+
+        let row = iter.next().unwrap();
+        assert_eq!(Some("John"), row.get("Name"));
+        assert_eq!(Some("20"), row.get("Age"));
+        assert_eq!(None, row.get("Extra"));
+
+        let row = iter.next().unwrap();
+        assert_eq!(Some("May"), row.get("Name"));
+        assert_eq!(Some("30"), row.get("Age"));
+        assert_eq!(Some("foo"), row.get("Extra"));
+
+        let row = iter.next().unwrap();
+        assert_eq!(None, row.get("Name"));
+        assert_eq!(None, row.get("Age"));
+        assert_eq!(None, row.get("Extra"));
+
+        let row = iter.next().unwrap();
+        assert_eq!(Some("a"), row.get("Name"));
+        assert_eq!(Some("b"), row.get("Age"));
+        assert_eq!(Some("c"), row.get("Extra"));
+
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_as_slice_without_headers() {
+        let table = Table::find_first(TABLE_TD).unwrap();
+        let mut iter = table.iter();
+
+        assert_eq!(&["Name", "Age"], iter.next().unwrap().as_slice());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_as_slice_with_headers() {
+        let table = Table::find_first(TABLE_TH_TD).unwrap();
+        let mut iter = table.iter();
+
+        assert_eq!(&["John", "20"], iter.next().unwrap().as_slice());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_as_slice_complex() {
+        let table = Table::find_first(TABLE_COMPLEX).unwrap();
+        let mut iter = table.iter();
+        let empty: [&str; 0] = [];
+
+        assert_eq!(&["John", "20"], iter.next().unwrap().as_slice());
+        assert_eq!(&["May", "30", "foo"], iter.next().unwrap().as_slice());
+        assert_eq!(&empty, iter.next().unwrap().as_slice());
+        assert_eq!(&["a", "b", "c", "d"], iter.next().unwrap().as_slice());
+        assert_eq!(None, iter.next());
     }
 }
