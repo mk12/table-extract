@@ -1,19 +1,22 @@
 // Copyright 2017 Mitchell Kember. Subject to the MIT License.
 
-//! Utility for parsing HTML tables.
+//! Utility for extracting data from HTML tables.
 //!
-//! This library provides support for extracting tables from HTML documents and
-//! iterating over their rows. There are three ways of extracting tables:
+//! This library allows you to parse tables from HTML documents and iterate over
+//! their rows. There are three entry points:
 //!
-//! - [`Table::find_first`] gets the first table.
+//! - [`Table::find_first`] finds the first table.
 //! - [`Table::find_by_id`] finds a table by its HTML id.
 //! - [`Table::find_by_headers`] finds a table that has certain headers.
 //!
-//! Each of these returns an [`Option<Table>`], since there might not be any
+//! Each of these returns an `Option<`[`Table`]`>`, since there might not be any
 //! matching table in the HTML. Once you have a table, you can iterate over it
 //! and access the contents of each [`Row`].
 //!
 //! # Examples
+//!
+//! Here is a simple example that uses [`Table::find_first`] to print the fields
+//! in each row of a table:
 //!
 //! ```
 //! let html = r#"
@@ -31,6 +34,12 @@
 //!     )
 //! }
 //! ```
+//!
+//! [`Table`]: struct.Table.html
+//! [`Row`]: struct.Row.html
+//! [`Table::find_first`]: struct.Table.html#method.find_first
+//! [`Table::find_by_id`]: struct.Table.html#method.find_by_id
+//! [`Table::find_by_headers`]: struct.Table.html#method.find_by_headers
 
 extern crate scraper;
 
@@ -50,7 +59,7 @@ use std::iter::FromIterator;
 /// </table>
 /// ```
 ///
-/// The `Headers` for this table would map `"Name"` to 0 and `"John"` to 1.
+/// The `Headers` for this table would map "Name" to 0 and "John" to 1.
 pub type Headers = HashMap<String, usize>;
 
 /// A parsed HTML table.
@@ -64,16 +73,12 @@ pub struct Table {
 
 impl Table {
     /// Finds the first table in `html`.
-    ///
-    /// Returns [`None`] if there is no table.
     pub fn find_first(html: &str) -> Option<Self> {
         let html = Html::parse_fragment(html);
         html.select(&css("table")).next().map(Self::new)
     }
 
     /// Finds the table in `html` with an id of `id`.
-    ///
-    /// Returns [`None`] if there is no such table.
     pub fn find_by_id(html: &str, id: &str) -> Option<Self> {
         let html = Html::parse_fragment(html);
         let selector = format!("table#{}", id);
@@ -85,12 +90,11 @@ impl Table {
             .map(Self::new)
     }
 
-    /// Finds the table in `html` that has a `<th>` header for each of the
-    /// strings in `headers` in its first row.
+    /// Finds the table in `html` whose first row contains all of the headers
+    /// specified in `headers`.
     ///
-    /// If `headers` is empty, this is the same as [`find_first`].
-    ///
-    /// Returns [`None`] if there is no such table.
+    /// If `headers` is empty, this is the same as
+    /// [`find_first`](#method.find_first).
     pub fn find_by_headers(
         html: &str,
         headers: &HashSet<String>,
@@ -113,14 +117,14 @@ impl Table {
             .map(Self::new)
     }
 
-    /// Returns the table headers.
+    /// Returns the headers of the table.
     ///
     /// This will be empty if the table had no `<th>` tags in its first row.
     pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
-    /// Returns an iterator over the rows of the table.
+    /// Returns an iterator over the [`Row`](struct.Row.html)s of the table.
     pub fn iter(&self) -> Iter {
         Iter {
             headers: &self.headers,
@@ -158,7 +162,7 @@ impl<'a> IntoIterator for &'a Table {
     }
 }
 
-/// An iterator over the rows in a [`Table`].
+/// An iterator over the rows in a [`Table`](struct.Table.html).
 pub struct Iter<'a> {
     headers: &'a Headers,
     iter: std::slice::Iter<'a, Vec<String>>,
@@ -173,11 +177,12 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
-/// A row in a [`Table`].
+/// A row in a [`Table`](struct.Table.html).
 ///
-/// A row consists of a number of data cells, stored as strings. If the row
-/// contains the same number of cells as the table's header row, the cells can
-/// be safely accessed by header name using [`get`].
+/// A row consists of a number of data cells stored as strings. If the row
+/// contains the same number of cells as the table's header row, its cells can
+/// be safely accessed by header names using [`get`](#method.get). Otherwise,
+/// the data should be accessed via [`as_slice`](#method.as_slice).
 pub struct Row<'a> {
     headers: &'a Headers,
     cells: &'a [String],
@@ -194,9 +199,9 @@ impl<'a> Row<'a> {
         self.cells.is_empty()
     }
 
-    /// Returns the cell underneath the header `header`.
+    /// Returns the cell underneath `header`.
     ///
-    /// Returns [`None`] if there is no such header, or if there is no cell at
+    /// Returns `None` if there is no such header, or if there is no cell at
     /// that position in the row.
     pub fn get(&self, header: &str) -> Option<&'a str> {
         self.headers
@@ -218,10 +223,7 @@ fn select_cells<T>(element: ElementRef, selector: &Selector) -> T
 where
     T: FromIterator<String>,
 {
-    element
-        .select(selector)
-        .map(|e| e.inner_html())
-        .collect()
+    element.select(selector).map(|e| e.inner_html()).collect()
 }
 
 #[cfg(test)]
