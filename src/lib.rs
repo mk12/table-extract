@@ -128,7 +128,7 @@ impl Table {
         let html = Html::parse_fragment(html);
         html.select(&sel_table)
             .find(|table| {
-                table.select(&sel_tr).next().iter().any(|&tr| {
+                table.select(&sel_tr).next().map_or(false, |tr| {
                     let cells = select_cells(tr, &sel_th);
                     headers.iter().all(|h| contains_str(&cells, h.as_ref()))
                 })
