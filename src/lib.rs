@@ -35,6 +35,25 @@
 //! }
 //! ```
 //!
+//! If the document has multiple tables, we can use [`Table::find_by_headers`]
+//! to identify the one we want:
+//!
+//! ```
+//! let html = r#"
+//!     <table></table>
+//!     <table>
+//!         <tr><th>Name</th><th>Age</th></tr>
+//!         <tr><td>John</td><td>20</td></tr>
+//!     </table>
+//! "#;
+//! let table = table_extract::Table::find_by_headers(html, &["Age"]).unwrap();
+//! for row in &table {
+//!     for cell in row {
+//!         println!("Table cell: {}", cell);
+//!     }
+//! }
+//! ```
+//!
 //! [`Table`]: struct.Table.html
 //! [`Row`]: struct.Row.html
 //! [`Table::find_first`]: struct.Table.html#method.find_first
@@ -163,7 +182,7 @@ impl<'a> IntoIterator for &'a Table {
     type Item = Row<'a>;
     type IntoIter = Iter<'a>;
 
-    fn into_iter(self) -> Iter<'a> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
@@ -177,7 +196,7 @@ pub struct Iter<'a> {
 impl<'a> Iterator for Iter<'a> {
     type Item = Row<'a>;
 
-    fn next(&mut self) -> Option<Row<'a>> {
+    fn next(&mut self) -> Option<Self::Item> {
         let headers = self.headers;
         self.iter.next().map(|cells| Row { headers, cells })
     }
@@ -188,8 +207,12 @@ impl<'a> Iterator for Iter<'a> {
 /// A row consists of a number of data cells stored as strings. If the row
 /// contains the same number of cells as the table's header row, its cells can
 /// be safely accessed by header names using [`get`](#method.get). Otherwise,
-/// the data should be accessed via [`as_slice`](#method.as_slice).
-#[derive(Debug, Eq, PartialEq)]
+/// the data should be accessed via [`as_slice`](#method.as_slice) or by
+/// iterating over the row.
+///
+/// This struct can be thought of as a lightweight reference into a table. As
+/// such, it implements the `Copy` trait.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Row<'a> {
     headers: &'a Headers,
     cells: &'a [String],
@@ -219,6 +242,20 @@ impl<'a> Row<'a> {
     /// Returns a slice containing all the cells.
     pub fn as_slice(&self) -> &'a [String] {
         self.cells
+    }
+
+    /// Returns an iterator over the cells of the row.
+    pub fn iter(&self) -> std::slice::Iter<String> {
+        self.cells.iter()
+    }
+}
+
+impl<'a> IntoIterator for Row<'a> {
+    type Item = &'a String;
+    type IntoIter = std::slice::Iter<'a, String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.cells.iter()
     }
 }
 
@@ -547,6 +584,48 @@ mod tests {
         assert_eq!(&["May", "30", "foo"], iter.next().unwrap().as_slice());
         assert_eq!(&empty, iter.next().unwrap().as_slice());
         assert_eq!(&["a", "b", "c", "d"], iter.next().unwrap().as_slice());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_iter_simple() {
+        let table = Table::find_first(TABLE_TD).unwrap();
+        let row = table.iter().next().unwrap();
+        let mut iter = row.iter();
+
+        assert_eq!(Some("Name"), iter.next().map(String::as_str));
+        assert_eq!(Some("Age"), iter.next().map(String::as_str));
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn test_row_iter_complex() {
+        let table = Table::find_first(TABLE_COMPLEX).unwrap();
+        let mut table_iter = table.iter();
+
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(Some("John"), iter.next().map(String::as_str));
+        assert_eq!(Some("20"), iter.next().map(String::as_str));
+        assert_eq!(None, iter.next());
+
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(Some("May"), iter.next().map(String::as_str));
+        assert_eq!(Some("30"), iter.next().map(String::as_str));
+        assert_eq!(Some("foo"), iter.next().map(String::as_str));
+        assert_eq!(None, iter.next());
+
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(None, iter.next());
+
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(Some("a"), iter.next().map(String::as_str));
+        assert_eq!(Some("b"), iter.next().map(String::as_str));
+        assert_eq!(Some("c"), iter.next().map(String::as_str));
+        assert_eq!(Some("d"), iter.next().map(String::as_str));
         assert_eq!(None, iter.next());
     }
 }
