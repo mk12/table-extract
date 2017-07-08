@@ -72,13 +72,13 @@ pub struct Table {
 
 impl Table {
     /// Finds the first table in `html`.
-    pub fn find_first(html: &str) -> Option<Self> {
+    pub fn find_first(html: &str) -> Option<Table> {
         let html = Html::parse_fragment(html);
-        html.select(&css("table")).next().map(Self::new)
+        html.select(&css("table")).next().map(Table::new)
     }
 
     /// Finds the table in `html` with an id of `id`.
-    pub fn find_by_id(html: &str, id: &str) -> Option<Self> {
+    pub fn find_by_id(html: &str, id: &str) -> Option<Table> {
         let html = Html::parse_fragment(html);
         let selector = format!("table#{}", id);
         Selector::parse(&selector)
@@ -86,7 +86,7 @@ impl Table {
             .as_ref()
             .map(|s| html.select(s))
             .and_then(|mut s| s.next())
-            .map(Self::new)
+            .map(Table::new)
     }
 
     /// Finds the table in `html` whose first row contains all of the headers
@@ -94,12 +94,12 @@ impl Table {
     ///
     /// If `headers` is empty, this is the same as
     /// [`find_first`](#method.find_first).
-    pub fn find_by_headers<T>(html: &str, headers: &[T]) -> Option<Self>
+    pub fn find_by_headers<T>(html: &str, headers: &[T]) -> Option<Table>
     where
         T: AsRef<str>,
     {
         if headers.is_empty() {
-            return Self::find_first(html);
+            return Table::find_first(html);
         }
 
         let sel_table = css("table");
@@ -114,7 +114,7 @@ impl Table {
                     headers.iter().all(|h| contains_str(&cells, h.as_ref()))
                 })
             })
-            .map(Self::new)
+            .map(Table::new)
     }
 
     /// Returns the headers of the table.
@@ -138,7 +138,7 @@ impl Table {
         }
     }
 
-    fn new(element: ElementRef) -> Self {
+    fn new(element: ElementRef) -> Table {
         let sel_tr = css("tr");
         let sel_th = css("th");
         let sel_td = css("td");
