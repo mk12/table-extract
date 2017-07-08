@@ -15,7 +15,7 @@
 //!
 //! # Examples
 //!
-//! Here is a simple example that uses [`Table::find_first`] to print the fields
+//! Here is a simple example that uses [`Table::find_first`] to print the cells
 //! in each row of a table:
 //!
 //! ```
@@ -58,7 +58,7 @@ use std::collections::HashMap;
 /// </table>
 /// ```
 ///
-/// The `Headers` for this table would map "Name" to 0 and "John" to 1.
+/// The `Headers` for this table would map "Name" to 0 and "Age" to 1.
 pub type Headers = HashMap<String, usize>;
 
 /// A parsed HTML table.
