@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Mitchell Kember <mk12360@gmail.com>"]
 description = "Utility for extracting data from HTML tables"
 license = "MIT"
+homepage = "https://github.com/mk12/table-extract"
 repository = "https://github.com/mk12/table-extract"
 documentation = "https://docs.rs/table-extract"
 readme = "README.md"
