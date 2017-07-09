@@ -166,7 +166,7 @@ impl Table {
         let mut rows = element.select(&sel_tr).peekable();
         if let Some(tr) = rows.peek() {
             for (i, th) in tr.select(&sel_th).enumerate() {
-                headers.insert(th.inner_html(), i);
+                headers.insert(cell_content(th), i);
             }
         }
         if !headers.is_empty() {
@@ -264,7 +264,11 @@ fn css(selector: &'static str) -> Selector {
 }
 
 fn select_cells(element: ElementRef, selector: &Selector) -> Vec<String> {
-    element.select(selector).map(|e| e.inner_html()).collect()
+    element.select(selector).map(cell_content).collect()
+}
+
+fn cell_content(element: ElementRef) -> String {
+    element.inner_html().trim().to_string()
 }
 
 fn contains_str(slice: &[String], item: &str) -> bool {
