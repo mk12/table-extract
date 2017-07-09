@@ -83,7 +83,7 @@ pub type Headers = HashMap<String, usize>;
 /// A parsed HTML table.
 ///
 /// See [the module level documentation](index.html) for more.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Table {
     headers: Headers,
     data: Vec<Vec<String>>,
