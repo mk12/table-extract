@@ -12,7 +12,7 @@ TableExtract is on [crates.io][2]. To use it, just add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-table-extract = "0.2.0"
+table-extract = "0.2.1"
 ```
 
 [2]: https://crates.io/crates/table-extract
