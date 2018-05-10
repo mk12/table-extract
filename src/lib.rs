@@ -351,6 +351,14 @@ mod tests {
 </html>
 "#;
 
+    const HTML_TABLE_FRAGMENT: &'static str = r#"
+        <table id="first">
+            <tr><th>Name</th><th>Age</th></tr>
+            <tr><td>John</td><td>20</td></tr>
+        </table>
+    </body>
+</html>
+"#;
 
     #[test]
     fn test_find_first_none() {
@@ -436,6 +444,12 @@ mod tests {
         assert!(Table::find_by_headers(TABLE_TH, &headers).is_some());
         assert!(Table::find_by_headers(TABLE_TH_TD, &headers).is_some());
         assert!(Table::find_by_headers(HTML_TWO_TABLES, &headers).is_some());
+    }
+
+
+    #[test]
+    fn test_find_first_incomplete_fragment() {
+        assert!(Table::find_first(HTML_TABLE_FRAGMENT).is_some());
     }
 
     #[test]
