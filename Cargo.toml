@@ -1,6 +1,6 @@
 [package]
 name = "table-extract"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Mitchell Kember <mk12360@gmail.com>"]
 edition = "2018"
 description = "Utility for extracting data from HTML tables"
