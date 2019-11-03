@@ -1,4 +1,4 @@
-// Copyright 2017 Mitchell Kember. Subject to the MIT License.
+// Copyright 2019 Mitchell Kember. Subject to the MIT License.
 
 //! Utility for extracting data from HTML tables.
 //!
@@ -59,8 +59,6 @@
 //! [`Table::find_first`]: struct.Table.html#method.find_first
 //! [`Table::find_by_id`]: struct.Table.html#method.find_by_id
 //! [`Table::find_by_headers`]: struct.Table.html#method.find_by_headers
-
-extern crate scraper;
 
 use scraper::element_ref::ElementRef;
 use scraper::{Html, Selector};
@@ -445,7 +443,6 @@ mod tests {
         assert!(Table::find_by_headers(TABLE_TH_TD, &headers).is_some());
         assert!(Table::find_by_headers(HTML_TWO_TABLES, &headers).is_some());
     }
-
 
     #[test]
     fn test_find_first_incomplete_fragment() {

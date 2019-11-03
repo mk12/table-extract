@@ -2,6 +2,7 @@
 name = "table-extract"
 version = "0.2.1"
 authors = ["Mitchell Kember <mk12360@gmail.com>"]
+edition = "2018"
 description = "Utility for extracting data from HTML tables"
 license = "MIT"
 homepage = "https://github.com/mk12/table-extract"
@@ -12,4 +13,4 @@ keywords = ["html", "table", "parse"]
 categories = ["parsing"]
 
 [dependencies]
-scraper = "0.4.0"
+scraper = "0.11"
