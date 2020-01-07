@@ -34,6 +34,46 @@
 //!     )
 //! }
 //! ```
+//!  If you want to extract multiple items from the `html` fragment,
+//! you can re-use the parsed HTML fragment:
+//! ``` 
+//! pub fn printit(table: &table_extract::Table) {
+//!    for row in table {
+//!      println!(
+//!         "{} is {} years old",
+//!         row.get("Name").unwrap_or("<name missing>"),
+//!         row.get("Age").unwrap_or("<age missing>")
+//!      )
+//!    }
+//! }
+//! 
+//! let htmlstr = r#"
+//!     <table>
+//!         <tr><th>Name</th><th>Age</th></tr>
+//!         <tr><td>John</td><td>20</td></tr>
+//!     </table>
+//!     <div id="some_ident">
+//!      <table>
+//!         <tr><th>Name</th><th>Age</th></tr>
+//!         <tr><td>Ola</td><td>70</td></tr>
+//!      </table>
+//!     </div>
+//!     <table>
+//!         <tr><th>Name</th><th>Age</th></tr>
+//!         <tr><td>Jane</td><td>19</td></tr>
+//!     </table>
+//! "#;
+//! let html = scraper::Html::parse_fragment(htmlstr);
+//! let table = table_extract::Table::find_first_from_html(&html).unwrap();
+//! printit(&table);
+//!
+//! let div_id = "some_ident";
+//! let selector_str = format!("div#{}", div_id);
+//! let selector = scraper::Selector::parse(&selector_str).unwrap();
+//! let sub_tree = html.select(&selector).next().unwrap();
+//! let table = table_extract::Table::find_first_from_elem(&sub_tree).unwrap();
+//! printit(&table);
+//! ```
 //!
 //! If the document has multiple tables, we can use [`Table::find_by_headers`]
 //! to identify the one we want:
@@ -88,22 +128,81 @@ pub struct Table {
 }
 
 impl Table {
-    /// Finds the first table in `html`.
-    pub fn find_first(html: &str) -> Option<Table> {
-        let html = Html::parse_fragment(html);
-        html.select(&css("table")).next().map(Table::new)
+    /// Finds the first table in `html` from `ElementRef`.
+    pub fn find_first_from_elem(elem: &ElementRef) -> Option<Table> {
+        elem.select(&css("table")).next().map(Table::new)
     }
 
-    /// Finds the table in `html` with an id of `id`.
-    pub fn find_by_id(html: &str, id: &str) -> Option<Table> {
+    /// Finds the first table in `html`.
+    pub fn find_first_from_html(html: &Html) -> Option<Table> {
+        Table::find_first_from_elem(&html.root_element())
+    }
+
+    /// Finds the first table in `html`  (From html String fragment).
+    pub fn find_first(html: &str) -> Option<Table> {
         let html = Html::parse_fragment(html);
+        Table::find_first_from_html(&html)
+    }
+    /// Finds the table in `html` with an id of `id` from `ElementRef`
+    pub fn find_by_id_from_elem(elem: &ElementRef, id: &str) -> Option<Table> {
         let selector = format!("table#{}", id);
         Selector::parse(&selector)
             .ok()
             .as_ref()
-            .map(|s| html.select(s))
+            .map(|s| elem.select(s))
             .and_then(|mut s| s.next())
             .map(Table::new)
+    }
+
+    /// Finds the table in `html` with an id of `id` from `Html`.
+    pub fn find_by_id_in_html(html: &Html, id: &str) -> Option<Table> {
+        Table::find_by_id_from_elem(&html.root_element(), &id)
+    }
+
+    /// Finds the table in `html` with an id of `id` (From html String fragment).
+    pub fn find_by_id(html: &str, id: &str) -> Option<Table> {
+        let html = Html::parse_fragment(html);
+        Table::find_by_id_in_html(&html, &id)
+    }
+
+
+    /// Finds the table in `html` whose first row contains all of the headers
+    /// specified in `headers`. The order does not matter.
+    ///
+    /// If `headers` is empty, this is the same as
+    /// [`find_first`](#method.find_first).
+    pub fn find_by_headers_from_elem<T>(elem: &ElementRef, headers: &[T]) -> Option<Table>
+    where
+        T: AsRef<str>,
+    {
+        if headers.is_empty() {
+            return Table::find_first_from_elem(elem);
+        }
+
+        let sel_table = css("table");
+        let sel_tr = css("tr");
+        let sel_th = css("th");
+
+        elem.select(&sel_table)
+            .find(|table| {
+                table.select(&sel_tr).next().map_or(false, |tr| {
+                    let cells = select_cells(tr, &sel_th);
+                    headers.iter().all(|h| contains_str(&cells, h.as_ref()))
+                })
+            })
+            .map(Table::new)
+    }
+
+    /// Finds the table in `html` whose first row contains all of the headers
+    /// specified in `headers`. The order does not matter.
+    ///
+    /// If `headers` is empty, this is the same as
+    /// [`find_first`](#method.find_first).
+    pub fn find_by_headers_from_html<T>(html: &Html, headers: &[T]) -> Option<Table>
+    where
+        T: AsRef<str>,
+    {
+        Table::find_by_headers_from_elem(&html.root_element(), headers)
     }
 
     /// Finds the table in `html` whose first row contains all of the headers
@@ -115,23 +214,8 @@ impl Table {
     where
         T: AsRef<str>,
     {
-        if headers.is_empty() {
-            return Table::find_first(html);
-        }
-
-        let sel_table = css("table");
-        let sel_tr = css("tr");
-        let sel_th = css("th");
-
         let html = Html::parse_fragment(html);
-        html.select(&sel_table)
-            .find(|table| {
-                table.select(&sel_tr).next().map_or(false, |tr| {
-                    let cells = select_cells(tr, &sel_th);
-                    headers.iter().all(|h| contains_str(&cells, h.as_ref()))
-                })
-            })
-            .map(Table::new)
+        Table::find_by_headers_from_html(&html, &headers)
     }
 
     /// Returns the headers of the table.
@@ -643,4 +727,134 @@ mod tests {
         assert_eq!(Some("d"), iter.next().map(String::as_str));
         assert_eq!(None, iter.next());
     }
+
+
+    const HTML_COMPLEX_JUNK_WITH_TABLES: &'static str = r####"
+    <html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="junk_main.css" />
+        <meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+        <meta name="ProgId" content="FrontPage.Editor.Document">
+        <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+        <title>Residential Gateway Configuration: Login</title>
+        <script language="JavaScript">
+        document.oncontextmenu = new Function("return false");
+        </script>
+    </head>
+    <body>
+    <CENTER>
+        <div class="junkContainer">
+            <div id="navigation_header">
+            </div>
+            <div id="navigationSubHeader">
+                <table width="1024" height="127">
+                    <tbody>
+                    <tr>
+                        <td width="235"><font face="Arial" color="#ffffff" size="5"></font></td>
+                        <td></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+                <div id="navigation_bar">
+              <ul>
+                <li><div class="box_current"><div class="box-outer"><div class="box-inner"><div class="box-final"><a href="/RgSwInfo.asp">Login</a></div></div></div></div></li>
+              </ul>
+            </div>
+            <div id="main_page">
+                <div class="table_data">
+                      <font size="4"><b>Cable Modem Information</b></font><br>
+                    <table>
+                       <tr><td>Cable Modem : DOCSIS 3.0 Compliant</td></tr>
+                       <tr><td>MAC Address : 40:B8:9A:DD:BF:D0</td></tr>
+                       <tr><td>Serial Number : BFD001A123456789</td></tr>
+                    </table>
+                    <br>
+                    <font size="4"><b>MTA Information</b></font><br>
+                    <table>   
+                       <tr><td>MAC Address : 40:B8:9A:DD:BF:D0</td></tr>
+                       <tr><td>CA Key : Installed</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div id="junk_tail">
+                <ul>
+                    <a>
+                    <center>
+                        &#x00a9; 2016 junk Interactive. All rights reserved.
+                    </center>
+                    </a>
+                </ul>
+            </div>
+        </div>
+    </CENTER>
+    </body>
+    </html>
+    "####;
+
+
+    #[test]
+    fn test_parse_complex_junk() {
+        let html = Html::parse_fragment(HTML_COMPLEX_JUNK_WITH_TABLES);
+
+        let div_id = "main_page";
+        let selector_str = format!("div#{}", div_id);
+        let selector = Selector::parse(&selector_str).unwrap();
+        let sub_tree = html.select(&selector).next().unwrap();
+        let table = Table::find_first_from_elem(&sub_tree).unwrap();
+        let mut table_iter = table.iter();
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(Some("Cable Modem : DOCSIS 3.0 Compliant"), iter.next().map(String::as_str));
+
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(Some("MAC Address : 40:B8:9A:DD:BF:D0"), iter.next().map(String::as_str));
+        
+        let row = table_iter.next().unwrap();
+        let mut iter = row.iter();
+        assert_eq!(Some("Serial Number : BFD001A123456789"), iter.next().map(String::as_str));
+    }
+
+ pub fn printit(table: &Table) {
+    for row in table {
+      println!(
+         "{} is {} years old",
+         row.get("Name").unwrap_or("<name missing>"),
+         row.get("Age").unwrap_or("<age missing>")
+      )
+    }
+ }
+
+ #[test]
+ fn test_example() {
+     let htmlstr = r#"
+        <table>
+            <tr><th>Name</th><th>Age</th></tr>
+            <tr><td>John</td><td>20</td></tr>
+        </table>
+        <div id="some_ident">
+        <table>
+            <tr><th>Name</th><th>Age</th></tr>
+            <tr><td>Ola</td><td>70</td></tr>
+        </table>
+        </div>
+        <table>
+            <tr><th>Name</th><th>Age</th></tr>
+            <tr><td>Jane</td><td>19</td></tr>
+        </table>
+    "#;
+    let html = Html::parse_fragment(htmlstr);
+    let table = Table::find_first_from_html(&html).unwrap();
+    printit(&table);
+    
+    let div_id = "some_ident";
+    let selector_str = format!("div#{}", div_id);
+    let selector = scraper::Selector::parse(&selector_str).unwrap();
+    let sub_tree = html.select(&selector).next().unwrap();
+    let table = Table::find_first_from_elem(&sub_tree).unwrap();
+    printit(&table);
+    }    
+
 }
+
