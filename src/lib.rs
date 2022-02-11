@@ -127,7 +127,22 @@ impl Table {
         html.select(&sel_table)
             .find(|table| {
                 table.select(&sel_tr).next().map_or(false, |tr| {
-                    let cells = select_cells(tr, &sel_th);
+                    let cells: Vec<String> = tr
+                        .select(&sel_th)
+                        .filter(|th| {
+                            // Only look at direct children of `tr`. This prevents of false positives in sub tables
+                            tr.children().any(|c| {
+                                if c.value().is_element() {
+                                    th.value()
+                                        == c.value().as_element().unwrap()
+                                } else {
+                                    false
+                                }
+                            })
+                        })
+                        .map(cell_content)
+                        .collect();
+
                     headers.iter().all(|h| contains_str(&cells, h.as_ref()))
                 })
             })
