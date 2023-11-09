@@ -155,7 +155,7 @@ impl Table {
         }
     }
 
-    fn new(element: ElementRef) -> Table {
+    pub fn new(element: ElementRef) -> Table {
         let sel_tr = css("tr");
         let sel_th = css("th");
         let sel_td = css("td");
