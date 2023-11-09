@@ -13,4 +13,4 @@ keywords = ["html", "table", "parse"]
 categories = ["parsing"]
 
 [dependencies]
-scraper = "0.13"
+scraper = "0.18"
